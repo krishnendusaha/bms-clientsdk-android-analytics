@@ -15,7 +15,7 @@ import android.app.Application;
 import android.content.Context;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.util.Log;
+
 
 import com.ibm.mobilefirstplatform.clientsdk.android.analytics.api.Analytics;
 import com.ibm.mobilefirstplatform.clientsdk.android.core.api.ResponseListener;
@@ -71,7 +71,7 @@ public class BMSAnalytics {
     protected static String appName = null;
     protected static boolean hasUserContext = false;
     public static boolean isRecordingNetworkEvents = false;
-    public static boolean collectLocation = true;
+    public static boolean collectLocation = false;
     public static MFPAnalyticsLocationListener locationService = null;
 
 
@@ -103,9 +103,10 @@ public class BMSAnalytics {
     static public void init(Application app, String applicationName, String clientApiKey, boolean hasUserContext, boolean collectLocation, Analytics.DeviceEvent... contexts) {
 
         Context context = app.getApplicationContext();
-        locationService = MFPAnalyticsLocationListener.getInstance(context);
-
-        //Initialize LogPersister
+        if (collectLocation) {
+            locationService = MFPAnalyticsLocationListener.getInstance(context);
+        }
+            //Initialize LogPersister
         LogPersister.setLogLevel(Logger.getLogLevel());
         LogPersister.setContext(context);
 
@@ -137,18 +138,20 @@ public class BMSAnalytics {
         }
 
          //if (!hasUserContext) {
-             //Use device ID as default user ID:
-            //DEFAULT_USER_ID = getDeviceID(context);
-            //setUserIdentity(DEFAULT_USER_ID, true);
-        //}
+         //    Use device ID as default user ID:
 
-	if (collectLocation) {
+         //}
+
+	    if (collectLocation) {
             BMSAnalytics.collectLocation = collectLocation;
             locationService.init();
         }
 
         DEFAULT_USER_ID = getDeviceID(context);
-
+        if(!collectLocation)
+        {
+            setUserIdentity(DEFAULT_USER_ID,true);
+        }
 
         BMSAnalytics.hasUserContext = hasUserContext;
         appName = applicationName;
@@ -162,7 +165,6 @@ public class BMSAnalytics {
 
     public static void setInitialUserIdentity()
     {
-        Log.d("TAG","Setting Initial User Identity");
         setUserIdentity(DEFAULT_USER_ID, true);
     }
     /**
@@ -183,6 +185,7 @@ public class BMSAnalytics {
     static public void init(Application app, String applicationName, String clientApiKey, Analytics.DeviceEvent... contexts) {
         init(app, applicationName, clientApiKey, false, false, contexts);
     }
+
 
     static protected String getDeviceID(Context context) {
         String uuid = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
@@ -246,8 +249,13 @@ public class BMSAnalytics {
      * Log location event
      */
     public static void logLocation(){
-        if (!BMSAnalytics.collectLocation) {
+        if (!BMSAnalytics.collectLocation ) {
             logger.error("You must enable collectLocation before location can be logged");
+            return;
+        }
+
+        if( !locationService.getInitLocationRequests()){
+            logger.error("locationService  Initialization has failed");
             return;
         }
 
@@ -257,8 +265,8 @@ public class BMSAnalytics {
 
         try {
             metadata.put(CATEGORY, LOG_LOCATION_KEY);
-            if(locationService != null) metadata.put(LATITUDE_KEY,locationService.getLatitude());
-            if(locationService != null) metadata.put(LONGITUDE_KEY,locationService.getLongitude());
+            metadata.put(LATITUDE_KEY,locationService.getLatitude());
+            metadata.put(LONGITUDE_KEY,locationService.getLongitude());
             metadata.put(TIMESTAMP_KEY, (new Date()).getTime());
             metadata.put(APP_SESSION_ID_KEY, MFPAnalyticsActivityLifecycleListener.getAppSessionID());
             metadata.put(USER_ID_KEY,hashedUserID);
@@ -297,9 +305,11 @@ public class BMSAnalytics {
             } else {
                 metadata.put(CATEGORY, USER_SWITCH_CATEGORY);
             }
-            if (BMSAnalytics.collectLocation && locationService.getInitLocationRequests()) {
-                metadata.put(LONGITUDE_KEY, locationService.getLongitude());
-                metadata.put(LATITUDE_KEY, locationService.getLatitude());
+            if (BMSAnalytics.collectLocation  ) {
+                if(locationService.getInitLocationRequests() ){
+                    metadata.put(LONGITUDE_KEY, locationService.getLongitude());
+                    metadata.put(LATITUDE_KEY, locationService.getLatitude());
+                }
             }
 
             metadata.put(TIMESTAMP_KEY, (new Date()).getTime());
